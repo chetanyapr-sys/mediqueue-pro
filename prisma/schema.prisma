@@ -1,0 +1,88 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  PATIENT
+  DOCTOR
+  ADMIN
+}
+
+enum AppointmentStatus {
+  WAITING
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+model User {
+  id                String    @id @default(auto()) @map("_id") @db.ObjectId
+  clerkId           String    @unique
+  name              String?
+  email             String    @unique
+  phone             String?
+  patientOnboarded  Boolean   @default(false)
+  role              Role      @default(PATIENT)
+  doctorProfile     Doctor?
+  appointments      Appointment[]
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+}
+
+model Doctor {
+  id                String    @id @default(auto()) @map("_id") @db.ObjectId
+  specialization    String
+  fees              Int
+  isAvailable       Boolean   @default(true)
+  workingHoursStart String    @default("10:00")
+  workingHoursEnd   String    @default("17:00")
+  maxPatientsPerDay Int       @default(20)
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  
+  userId            String    @unique 
+  user              User      @relation(fields: [userId], references: [clerkId])
+  
+  appointments      Appointment[]
+}
+
+model Appointment {
+  id              String            @id @default(auto()) @map("_id") @db.ObjectId
+  tokenNumber     Int
+  status          AppointmentStatus @default(WAITING)
+  
+  patientId       String            
+  patient         User              @relation(fields: [patientId], references: [clerkId])
+
+  doctorId        String            
+  doctor          Doctor            @relation(fields: [doctorId], references: [userId])
+
+  symptoms        String?
+  appointmentDate DateTime
+
+  // Ek appointment ki sirf ek hi prescription ho sakti hai (1-to-1)
+  prescription    Prescription?
+
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+}
+
+model Prescription {
+  id            String      @id @default(auto()) @map("_id") @db.ObjectId
+
+  appointmentId String      @unique
+  appointment   Appointment @relation(fields: [appointmentId], references: [id])
+
+  diagnosis     String?     // e.g. "Viral Fever", "Seasonal Allergy"
+  medicines     String      // Free-text list — "1. Paracetamol 500mg - 2x daily for 5 days\n2. ..."
+  notes         String?     // Extra advice — rest, diet, follow-up date, etc.
+
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+}
