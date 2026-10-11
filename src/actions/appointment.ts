@@ -2,7 +2,7 @@
 import { db } from "@/lib/db";
 import { currentUser } from "@clerk/nextjs/server";
 import { revalidatePath } from "next/cache";
-import { generateTimeSlots } from "@/lib/slots";
+import { generateTimeSlots, SLOT_MINUTES } from "@/lib/slots";
 
 // Booking form ko batata hai ki us doctor ke us din kaun se slots pehle se book hain.
 // Return: ["10:00", "10:15", ...]  (cancelled appointments ginte nahi, unka slot phir khali ho jata hai)
@@ -67,7 +67,7 @@ export async function createAppointment(formData: FormData): Promise<{ success: 
   if (!doctor.isAvailable) return { success: false, error: "This doctor is currently unavailable." };
 
   // Slot doctor ke working hours ke andar (aur slot grid par) hona chahiye
-  const validSlots = generateTimeSlots(doctor.workingHoursStart, doctor.workingHoursEnd);
+  const validSlots = generateTimeSlots(doctor.workingHoursStart, doctor.workingHoursEnd, doctor.slotDuration ?? SLOT_MINUTES);
   if (!validSlots.includes(timeStr)) {
     return { success: false, error: "This time is outside the doctor's working hours. Please pick another slot." };
   }

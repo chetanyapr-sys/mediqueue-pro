@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Loader2, Stethoscope, IndianRupee, Clock3, Users } from "lucide-react";
+import { Loader2, Stethoscope, IndianRupee, Clock3, Users, Timer } from "lucide-react";
 import { updateDoctorProfile } from "@/actions/doctor";
 
 interface ProfileFormProps {
@@ -12,7 +12,10 @@ interface ProfileFormProps {
   workingHoursStart: string;
   workingHoursEnd: string;
   maxPatientsPerDay: number;
+  slotDuration: number;
 }
+
+const SLOT_OPTIONS = [10, 15, 20, 30];
 
 export default function ProfileForm({
   specialization: initialSpecialization,
@@ -20,6 +23,7 @@ export default function ProfileForm({
   workingHoursStart: initialStart,
   workingHoursEnd: initialEnd,
   maxPatientsPerDay: initialLimit,
+  slotDuration: initialSlot,
 }: ProfileFormProps) {
   const router = useRouter();
   const [specialization, setSpecialization] = useState(initialSpecialization);
@@ -27,6 +31,7 @@ export default function ProfileForm({
   const [workingHoursStart, setWorkingHoursStart] = useState(initialStart);
   const [workingHoursEnd, setWorkingHoursEnd] = useState(initialEnd);
   const [maxPatientsPerDay, setMaxPatientsPerDay] = useState(String(initialLimit));
+  const [slotDuration, setSlotDuration] = useState(initialSlot);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -39,6 +44,7 @@ export default function ProfileForm({
     formData.set("workingHoursStart", workingHoursStart);
     formData.set("workingHoursEnd", workingHoursEnd);
     formData.set("maxPatientsPerDay", maxPatientsPerDay);
+    formData.set("slotDuration", String(slotDuration));
 
     const result = await updateDoctorProfile(formData);
 
@@ -111,6 +117,39 @@ export default function ProfileForm({
             />
           </div>
         </div>
+      </div>
+
+      {/* Slot Length */}
+      <div className="space-y-3">
+        <label className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.3em] text-zinc-600">
+          <Timer className="h-3.5 w-3.5" /> Time Per Patient
+        </label>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {SLOT_OPTIONS.map((mins) => {
+            const selected = slotDuration === mins;
+            return (
+              <button
+                key={mins}
+                type="button"
+                onClick={() => setSlotDuration(mins)}
+                aria-pressed={selected}
+                className={`flex flex-col items-center justify-center py-4 rounded-2xl border text-sm font-black transition-all duration-300 ${
+                  selected
+                    ? "bg-blue-600 text-white border-blue-600"
+                    : "bg-zinc-900/50 border-zinc-800 text-zinc-300 hover:border-blue-500/40"
+                }`}
+              >
+                <span className="text-lg">{mins}</span>
+                <span className="text-[10px] font-bold uppercase tracking-widest">
+                  {selected ? "Selected" : "Minutes"}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+        <p className="text-xs text-zinc-600">
+          Har patient ko itna time milega. Slot length badalne se pehle aane wali bookings dekh lo, kyunki purani bookings naye slots pe nahi baithengi.
+        </p>
       </div>
 
       {/* Daily Patient Limit */}

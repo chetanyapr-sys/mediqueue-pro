@@ -14,6 +14,7 @@ interface BookingFormProps {
   fees: number;
   workingHoursStart: string; // "10:00"
   workingHoursEnd: string;   // "17:00"
+  slotDuration: number;      // minutes, e.g. 15
 }
 
 function formatTimeLabel(time24: string) {
@@ -31,10 +32,9 @@ function toDateStr(date: Date) {
   return `${yyyy}-${mm}-${dd}`;
 }
 
-export default function BookingForm({ doctorClerkId, doctorName, fees, workingHoursStart, workingHoursEnd }: BookingFormProps) {
+export default function BookingForm({ doctorClerkId, doctorName, fees, workingHoursStart, workingHoursEnd, slotDuration }: BookingFormProps) {
   const router = useRouter();
-  const allSlots = useMemo(() => generateTimeSlots(workingHoursStart, workingHoursEnd), [workingHoursStart, workingHoursEnd]);
-
+   const allSlots = useMemo(() => generateTimeSlots(workingHoursStart, workingHoursEnd, slotDuration), [workingHoursStart, workingHoursEnd, slotDuration]);
   const [selectedDate, setSelectedDate] = useState<Date>(() => {
     const d = new Date();
     d.setHours(0, 0, 0, 0);

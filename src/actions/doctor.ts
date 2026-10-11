@@ -136,7 +136,7 @@ export async function toggleAvailability(doctorUserId: string, currentStatus: bo
 
 /**
  * 5. Doctor apni profile edit kar sake — specialization, fees,
- * working hours (start/end), aur roz ke max patients ki limit.
+ * working hours (start/end), roz ke max patients ki limit, aur slot length.
  */
 export async function updateDoctorProfile(formData: FormData): Promise<{ success: boolean; error?: string }> {
   try {
@@ -148,6 +148,10 @@ export async function updateDoctorProfile(formData: FormData): Promise<{ success
     const workingHoursStart = formData.get("workingHoursStart") as string;
     const workingHoursEnd = formData.get("workingHoursEnd") as string;
     const maxPatientsPerDay = Number(formData.get("maxPatientsPerDay"));
+
+    // Slot length optional hai: form na bheje to purani value waisi hi rahegi
+    const slotRaw = formData.get("slotDuration");
+    const slotDuration = slotRaw ? Number(slotRaw) : undefined;
 
     if (!specialization || !workingHoursStart || !workingHoursEnd) {
       return { success: false, error: "Please fill in all required fields." };
@@ -161,10 +165,13 @@ export async function updateDoctorProfile(formData: FormData): Promise<{ success
     if (workingHoursStart >= workingHoursEnd) {
       return { success: false, error: "Working hours end time must be after start time." };
     }
+    if (slotDuration !== undefined && ![10, 15, 20, 30].includes(slotDuration)) {
+      return { success: false, error: "Slot length must be 10, 15, 20 or 30 minutes." };
+    }
 
     await db.doctor.update({
       where: { userId },
-      data: { specialization, fees, workingHoursStart, workingHoursEnd, maxPatientsPerDay }
+      data: { specialization, fees, workingHoursStart, workingHoursEnd, maxPatientsPerDay, slotDuration }
     });
 
     revalidatePath("/dashboard/doctor");

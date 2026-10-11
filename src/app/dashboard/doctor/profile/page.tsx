@@ -39,6 +39,7 @@ export default async function DoctorProfilePage() {
         workingHoursStart={doctor.workingHoursStart}
         workingHoursEnd={doctor.workingHoursEnd}
         maxPatientsPerDay={doctor.maxPatientsPerDay}
+        slotDuration={doctor.slotDuration ?? 15}
       />
     </div>
   );

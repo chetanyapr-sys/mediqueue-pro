@@ -42,6 +42,7 @@ model Doctor {
   workingHoursStart String    @default("10:00")
   workingHoursEnd   String    @default("17:00")
   maxPatientsPerDay Int       @default(20)
+    slotDuration      Int?      @default(15)
 
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt

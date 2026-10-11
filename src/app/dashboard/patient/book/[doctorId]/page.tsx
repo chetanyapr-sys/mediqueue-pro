@@ -86,6 +86,7 @@ export default async function BookingPage({ params }: { params: Promise<{ doctor
             fees={doctor.fees}
             workingHoursStart={doctor.workingHoursStart}
             workingHoursEnd={doctor.workingHoursEnd}
+             slotDuration={doctor.slotDuration ?? 15}
           />
         </div>
       </div>
