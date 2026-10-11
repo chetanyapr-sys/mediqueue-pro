@@ -84,9 +84,13 @@ export default async function DoctorDashboard() {
 
   // Aaj ka breakdown
   const active = todayAppointments.filter((a) => a.status !== "CANCELLED");
-  const waiting = active
+    const waiting = active
     .filter((a) => a.status === "WAITING")
-    .sort((a, b) => a.tokenNumber - b.tokenNumber);
+    .sort(
+      (a, b) =>
+        a.appointmentDate.getTime() - b.appointmentDate.getTime() ||
+        a.tokenNumber - b.tokenNumber
+    );
   const nowServing = active.find((a) => a.status === "IN_PROGRESS") ?? null;
   const completedToday = active.filter((a) => a.status === "COMPLETED").length;
   const cancelledToday = todayAppointments.length - active.length;

@@ -64,6 +64,18 @@ export default async function PatientDashboard() {
     });
   }
 
+  // Meri asli position: mere se pehle ke slot wale WAITING log (aaj, usi doctor ke)
+  let peopleAhead = 0;
+  if (myAppt && myAppt.doctorId && isTodayAppt && myAppt.status === "WAITING") {
+    peopleAhead = await db.appointment.count({
+      where: {
+        doctorId: myAppt.doctorId,
+        status: "WAITING",
+        appointmentDate: { gte: today, lt: myAppt.appointmentDate },
+      }
+    });
+  }
+
   const myAppointmentIds = await db.appointment.findMany({
     where: { patientId: user.id },
     select: { id: true },
@@ -135,7 +147,9 @@ export default async function PatientDashboard() {
             </div>
             <div className="flex justify-between text-[10px] font-black text-zinc-600 uppercase tracking-widest">
               <span>Entering</span>
-              <span className="text-white">Your Position ({hasAppt ? `#${myAppt?.tokenNumber}` : "None"})</span>
+              <span className="text-white">
+                Your Position ({!hasAppt ? "None" : !isTodayAppt ? "Not today" : myAppt?.status === "IN_PROGRESS" ? "Your turn" : `#${peopleAhead + 1}`})
+              </span>
               <span>Doctor's Room</span>
             </div>
             <div className="h-40 flex items-center justify-center border border-dashed border-zinc-800 rounded-3xl bg-zinc-950/50">
@@ -155,22 +169,22 @@ export default async function PatientDashboard() {
             <CardTitle className="text-xl font-bold text-white uppercase italic tracking-tighter">My Doctor</CardTitle>
           </CardHeader>
           <CardContent>
-             <div className="flex flex-col items-center justify-center h-[250px] space-y-4">
-                <div className={`w-24 h-24 rounded-3xl bg-zinc-800 border-2 ${hasAppt ? 'border-blue-500' : 'border-zinc-700'} flex items-center justify-center overflow-hidden transition-all duration-300`}>
-                   <User className="h-12 w-12 text-zinc-600" />
-                </div>
-                <div className="text-center space-y-1">
-                   <h3 className="text-white font-black text-2xl tracking-tighter uppercase">
-                    {hasAppt ? `Dr. ${myAppt?.doctor?.user?.name}` : "No Specialist"}
-                   </h3>
-                   <p className="text-blue-500 text-[10px] font-black uppercase tracking-[0.2em]">
-                    {hasAppt ? myAppt?.doctor?.specialization : "Please book an appointment"}
-                   </p>
-                </div>
-                <button className="w-full py-4 bg-white text-black text-[10px] font-black uppercase tracking-[0.2em] rounded-2xl disabled:opacity-30 mt-4 transition-all duration-300 hover:bg-blue-600 hover:text-white disabled:hover:bg-white disabled:hover:text-black" disabled={!hasAppt}>
-                  Contact Hospital
-                </button>
-             </div>
+            <div className="flex flex-col items-center justify-center h-[250px] space-y-4">
+              <div className={`w-24 h-24 rounded-3xl bg-zinc-800 border-2 ${hasAppt ? 'border-blue-500' : 'border-zinc-700'} flex items-center justify-center overflow-hidden transition-all duration-300`}>
+                <User className="h-12 w-12 text-zinc-600" />
+              </div>
+              <div className="text-center space-y-1">
+                <h3 className="text-white font-black text-2xl tracking-tighter uppercase">
+                  {hasAppt ? `Dr. ${myAppt?.doctor?.user?.name}` : "No Specialist"}
+                </h3>
+                <p className="text-blue-500 text-[10px] font-black uppercase tracking-[0.2em]">
+                  {hasAppt ? myAppt?.doctor?.specialization : "Please book an appointment"}
+                </p>
+              </div>
+              <button className="w-full py-4 bg-white text-black text-[10px] font-black uppercase tracking-[0.2em] rounded-2xl disabled:opacity-30 mt-4 transition-all duration-300 hover:bg-blue-600 hover:text-white disabled:hover:bg-white disabled:hover:text-black" disabled={!hasAppt}>
+                Contact Hospital
+              </button>
+            </div>
           </CardContent>
         </Card>
       </div>

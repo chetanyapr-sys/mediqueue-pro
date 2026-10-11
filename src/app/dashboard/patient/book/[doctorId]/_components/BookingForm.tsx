@@ -1,10 +1,11 @@
 "use client"
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { CalendarDays, Clock3, Loader2 } from "lucide-react";
-import { createAppointment } from "@/actions/appointment";
+import { createAppointment, getBookedSlots } from "@/actions/appointment";
+import { generateTimeSlots } from "@/lib/slots";
 import Calendar from "./Calendar";
 
 interface BookingFormProps {
@@ -15,29 +16,19 @@ interface BookingFormProps {
   workingHoursEnd: string;   // "17:00"
 }
 
-// Doctor ke working hours (e.g. "10:00" se "17:00") ke beech 30-minute ke slots generate karta hai
-function generateTimeSlots(start: string, end: string) {
-  const slots: string[] = [];
-  const [startH, startM] = start.split(":").map(Number);
-  const [endH, endM] = end.split(":").map(Number);
-
-  let current = startH * 60 + startM;
-  const endMinutes = endH * 60 + endM;
-
-  while (current < endMinutes) {
-    const h = Math.floor(current / 60);
-    const m = current % 60;
-    slots.push(`${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`);
-    current += 30;
-  }
-  return slots;
-}
-
 function formatTimeLabel(time24: string) {
   const [h, m] = time24.split(":").map(Number);
   const period = h >= 12 ? "PM" : "AM";
   const hour12 = h % 12 === 0 ? 12 : h % 12;
   return `${hour12}:${String(m).padStart(2, "0")} ${period}`;
+}
+
+// Date ko yyyy-mm-dd string mein badalta hai (server isse parse karta hai)
+function toDateStr(date: Date) {
+  const yyyy = date.getFullYear();
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  const dd = String(date.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
 }
 
 export default function BookingForm({ doctorClerkId, doctorName, fees, workingHoursStart, workingHoursEnd }: BookingFormProps) {
@@ -53,6 +44,31 @@ export default function BookingForm({ doctorClerkId, doctorName, fees, workingHo
   const [symptoms, setSymptoms] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Is date par pehle se book ho chuke slots
+  const [bookedSlots, setBookedSlots] = useState<string[]>([]);
+  const [loadingSlots, setLoadingSlots] = useState(true);
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  // Date badalne par (ya booking fail hone par) booked slots dobara laao
+  useEffect(() => {
+    let cancelled = false;
+    setLoadingSlots(true);
+    getBookedSlots(doctorClerkId, toDateStr(selectedDate))
+      .then((booked) => {
+        if (cancelled) return;
+        setBookedSlots(booked);
+        // Agar chuna hua slot beech mein kisi ne le liya, to selection hata do
+        setSelectedTime((prev) => (prev && booked.includes(prev) ? null : prev));
+        setLoadingSlots(false);
+      })
+      .catch(() => {
+        if (!cancelled) setLoadingSlots(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [doctorClerkId, selectedDate, refreshKey]);
+
   // Agar aaj ka din selected hai, toh beete hue time-slots hide kar do
   const visibleSlots = useMemo(() => {
     const isToday = selectedDate.toDateString() === new Date().toDateString();
@@ -64,6 +80,8 @@ export default function BookingForm({ doctorClerkId, doctorName, fees, workingHo
       return h * 60 + m > nowMinutes;
     });
   }, [allSlots, selectedDate]);
+
+  const freeCount = visibleSlots.filter((s) => !bookedSlots.includes(s)).length;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -82,11 +100,7 @@ export default function BookingForm({ doctorClerkId, doctorName, fees, workingHo
     const formData = new FormData();
     formData.set("doctorClerkId", doctorClerkId);
     formData.set("symptoms", symptoms);
-    // yyyy-mm-dd format mein date bhejna zaroori hai (server isse parse karta hai)
-    const yyyy = selectedDate.getFullYear();
-    const mm = String(selectedDate.getMonth() + 1).padStart(2, "0");
-    const dd = String(selectedDate.getDate()).padStart(2, "0");
-    formData.set("appointmentDate", `${yyyy}-${mm}-${dd}`);
+    formData.set("appointmentDate", toDateStr(selectedDate));
     formData.set("appointmentTime", selectedTime);
 
     const result = await createAppointment(formData);
@@ -96,6 +110,9 @@ export default function BookingForm({ doctorClerkId, doctorName, fees, workingHo
       router.push("/dashboard/patient");
     } else {
       toast.error(result.error || "Something went wrong. Please try again.");
+      // Ho sakta hai slot kisi aur ne le liya ho — list dobara laao
+      setSelectedTime(null);
+      setRefreshKey((k) => k + 1);
       setIsSubmitting(false);
     }
   }
@@ -124,25 +141,44 @@ export default function BookingForm({ doctorClerkId, doctorName, fees, workingHo
             — {selectedDate.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
           </span>
         </label>
-        {visibleSlots.length > 0 ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            {visibleSlots.map((slot) => (
-              <button
-                key={slot}
-                type="button"
-                onClick={() => setSelectedTime(slot)}
-                className={`flex items-center justify-center py-3.5 px-2 rounded-xl text-xs font-bold border whitespace-nowrap transition-all duration-300 ${
-                  selectedTime === slot
-                    ? "bg-blue-600 text-white border-blue-600"
-                    : "bg-zinc-900/50 border-zinc-800 text-zinc-300 hover:border-blue-500/40"
-                }`}
-              >
-                {formatTimeLabel(slot)}
-              </button>
-            ))}
-          </div>
-        ) : (
+
+        {visibleSlots.length === 0 ? (
           <p className="text-sm text-zinc-600 italic py-4">No slots left for today. Please pick another date.</p>
+        ) : loadingSlots ? (
+          <div className="flex items-center gap-2 py-4 text-sm text-zinc-500">
+            <Loader2 className="h-4 w-4 animate-spin" /> Checking free slots...
+          </div>
+        ) : freeCount === 0 ? (
+          <p className="text-sm text-zinc-600 italic py-4">All slots are booked on this date. Please pick another date.</p>
+        ) : (
+          <>
+            <p className="text-xs text-zinc-500">
+              {freeCount} {freeCount === 1 ? "slot" : "slots"} free
+            </p>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {visibleSlots.map((slot) => {
+                const isBooked = bookedSlots.includes(slot);
+                return (
+                  <button
+                    key={slot}
+                    type="button"
+                    disabled={isBooked}
+                    onClick={() => setSelectedTime(slot)}
+                    className={`flex flex-col items-center justify-center py-3.5 px-2 rounded-xl text-xs font-bold border whitespace-nowrap transition-all duration-300 ${
+                      isBooked
+                        ? "bg-zinc-900/30 border-zinc-900 text-zinc-600 cursor-not-allowed"
+                        : selectedTime === slot
+                          ? "bg-blue-600 text-white border-blue-600"
+                          : "bg-zinc-900/50 border-zinc-800 text-zinc-300 hover:border-blue-500/40"
+                    }`}
+                  >
+                    <span className={isBooked ? "line-through" : ""}>{formatTimeLabel(slot)}</span>
+                    {isBooked && <span className="text-[10px] font-semibold text-zinc-600 mt-0.5">Booked</span>}
+                  </button>
+                );
+              })}
+            </div>
+          </>
         )}
       </div>
 

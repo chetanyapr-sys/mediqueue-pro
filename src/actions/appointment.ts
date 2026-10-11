@@ -2,6 +2,37 @@
 import { db } from "@/lib/db";
 import { currentUser } from "@clerk/nextjs/server";
 import { revalidatePath } from "next/cache";
+import { generateTimeSlots } from "@/lib/slots";
+
+// Booking form ko batata hai ki us doctor ke us din kaun se slots pehle se book hain.
+// Return: ["10:00", "10:15", ...]  (cancelled appointments ginte nahi, unka slot phir khali ho jata hai)
+export async function getBookedSlots(doctorClerkId: string, dateStr: string): Promise<string[]> {
+  const user = await currentUser();
+  if (!user) return [];
+
+  const day = new Date(`${dateStr}T00:00:00`);
+  if (isNaN(day.getTime())) return [];
+
+  const dayStart = new Date(day);
+  dayStart.setHours(0, 0, 0, 0);
+  const dayEnd = new Date(dayStart);
+  dayEnd.setDate(dayEnd.getDate() + 1);
+
+  const appts = await db.appointment.findMany({
+    where: {
+      doctorId: doctorClerkId,
+      appointmentDate: { gte: dayStart, lt: dayEnd },
+      status: { in: ["WAITING", "IN_PROGRESS", "COMPLETED"] }
+    },
+    select: { appointmentDate: true }
+  });
+
+  return appts.map((a) => {
+    const h = String(a.appointmentDate.getHours()).padStart(2, "0");
+    const m = String(a.appointmentDate.getMinutes()).padStart(2, "0");
+    return `${h}:${m}`;
+  });
+}
 
 export async function createAppointment(formData: FormData): Promise<{ success: boolean; error?: string }> {
   const user = await currentUser();
@@ -34,6 +65,24 @@ export async function createAppointment(formData: FormData): Promise<{ success: 
   const doctor = await db.doctor.findUnique({ where: { userId: doctorClerkId } });
   if (!doctor) return { success: false, error: "Doctor not found." };
   if (!doctor.isAvailable) return { success: false, error: "This doctor is currently unavailable." };
+
+  // Slot doctor ke working hours ke andar (aur slot grid par) hona chahiye
+  const validSlots = generateTimeSlots(doctor.workingHoursStart, doctor.workingHoursEnd);
+  if (!validSlots.includes(timeStr)) {
+    return { success: false, error: "This time is outside the doctor's working hours. Please pick another slot." };
+  }
+
+  // Double-booking check: same doctor, same slot, koi active appointment to nahi?
+  const slotTaken = await db.appointment.findFirst({
+    where: {
+      doctorId: doctorClerkId,
+      appointmentDate: appointmentDate,
+      status: { in: ["WAITING", "IN_PROGRESS", "COMPLETED"] }
+    }
+  });
+  if (slotTaken) {
+    return { success: false, error: "This slot was just booked by someone else. Please pick another time." };
+  }
 
   const bookingsThatDay = await db.appointment.count({
     where: {
@@ -74,6 +123,7 @@ export async function createAppointment(formData: FormData): Promise<{ success: 
 }
 
 // Doctor clicks "Call Next Patient" -> earliest WAITING patient for TODAY becomes IN_PROGRESS
+// Ab order slot time (appointmentDate) ke hisaab se hai, token sirf tie-break ke liye.
 export async function callNextPatient(doctorId: string): Promise<void> {
   const user = await currentUser();
   if (!user) throw new Error("Unauthorized");
@@ -98,7 +148,7 @@ export async function callNextPatient(doctorId: string): Promise<void> {
       status: "WAITING",
       appointmentDate: { gte: todayStart, lt: todayEnd }
     },
-    orderBy: { tokenNumber: "asc" }
+    orderBy: [{ appointmentDate: "asc" }, { tokenNumber: "asc" }]
   });
 
   if (!nextPatient) {
